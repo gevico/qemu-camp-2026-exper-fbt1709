@@ -133,8 +133,10 @@ GPGPU_TOTAL := 17
 .PHONY: test-gpgpu
 test-gpgpu: build
 	@passed=0; \
+	export QTEST_QEMU_BINARY=$(BUILD_DIR)/qemu-system-riscv64; \
 	for t in $(GPGPU_SUBTESTS); do \
-	    if $(BUILD_DIR)/tests/qtest/qos-test -p /riscv64/gpgpu-tests/$$t \
+	    if $(BUILD_DIR)/tests/qtest/qos-test \
+	        -p /riscv64/virt/generic-pcihost/pci-bus-generic/pci-bus/gpgpu/gpgpu-tests/$$t \
 	        --tap -k 2>/dev/null | grep -q "^ok "; then \
 	        passed=$$((passed + 1)); \
 	    fi; \
