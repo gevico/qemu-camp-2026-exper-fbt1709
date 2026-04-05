@@ -9,6 +9,13 @@ qtests_riscv64 = [
     'test-flash-read-interrupt',
     'test-spi-cs',
     'test-spi-overrun',
+    'test-i2c-gpio-init',
+    'test-i2c-gpio-bitbang',
+    'test-i2c-eeprom-rw',
+    'test-i2c-eeprom-page',
+    'test-spi-rust-init',
+    'test-spi-rust-transfer',
+    'test-spi-rust-flash',
 ]
 qtests = {}
 qtest_executables = {}
