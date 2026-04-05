@@ -143,22 +143,41 @@ test-gpgpu: build
 	echo "$$passed" > $(BUILD_DIR)/gpgpu-result.log; \
 	echo "--- GPGPU experiment: $$passed/$(GPGPU_TOTAL) tests passed, score $$score/100 ---"
 
-# ─── Rust experiment (unit tests + QTest) ─────────────────────────────
+# ─── Rust experiment (3 unit tests + 7 QTest = 10 tests, 100 pts) ─────
+
+RUST_QTEST_TESTS := test-i2c-gpio-init test-i2c-gpio-bitbang \
+                     test-i2c-eeprom-rw test-i2c-eeprom-page \
+                     test-spi-rust-init test-spi-rust-transfer \
+                     test-spi-rust-flash
+
+RUST_UNIT_NAMES := test_i2c_bus_create test_i2c_bus_read_write test_i2c_bus_nack
 
 .PHONY: test-rust
-test-rust: test-rust-unit test-rust-qtest
-	@echo "--- Rust experiment tests done ---"
-
-.PHONY: test-rust-unit
-test-rust-unit: build
-	$(MAKE) -C $(BUILD_DIR) check-rust
-	@echo "--- Rust unit tests done ---"
-
-.PHONY: test-rust-qtest
-test-rust-qtest: build
-	cd $(BUILD_DIR) && $(MESON) test --suite qtest-riscv64 --test-args '-p /riscv64/rust*' \
-	    --print-errorlogs --no-rebuild
-	@echo "--- Rust QTest done ---"
+test-rust: build
+	@passed=0; \
+	echo "=== Rust unit tests (I2C bus) ==="; \
+	for t in $(RUST_UNIT_NAMES); do \
+	    if cd $(BUILD_DIR) && $(MESON) test --no-rebuild \
+	        --test-args "$$t" rust-i2c-unit 2>/dev/null | grep -q "Ok:.*1"; then \
+	        passed=$$((passed + 1)); \
+	        echo "  PASS $$t"; \
+	    else \
+	        echo "  FAIL $$t"; \
+	    fi; \
+	done; \
+	echo "=== Rust QTest (I2C/SPI devices) ==="; \
+	for t in $(RUST_QTEST_TESTS); do \
+	    if cd $(BUILD_DIR) && $(MESON) test --no-rebuild --print-errorlogs \
+	        "qtest-riscv64/$$t" 2>/dev/null; then \
+	        passed=$$((passed + 1)); \
+	        echo "  PASS $$t"; \
+	    else \
+	        echo "  FAIL $$t"; \
+	    fi; \
+	done; \
+	echo "$$passed" > $(BUILD_DIR)/rust-result.log; \
+	score=$$((passed * 10)); \
+	echo "--- Rust experiment: $$passed/10 tests passed, score $$score/100 ---"
 
 # ─── Run all tests ────────────────────────────────────────────────────
 
