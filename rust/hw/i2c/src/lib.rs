@@ -68,6 +68,7 @@ pub trait I2CSlave {
 ///
 /// Mirrors `I2CBus` from upstream QEMU. The bus holds references to
 /// attached slaves and routes transfers based on 7-bit address matching.
+#[allow(dead_code)]
 pub struct I2CBus {
     devices: Vec<Box<dyn I2CSlave>>,
     /// Address of the currently selected slave (set by `start_transfer`)
