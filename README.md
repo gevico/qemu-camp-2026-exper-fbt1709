@@ -21,7 +21,7 @@ Full tutorial site: <https://qemu.gevico.online/>
 | **CPU** | TCG testcase | `tests/gevico/tcg/` | 10 tests x 10 pts = 100 |
 | **SoC** | QTest | `tests/gevico/qtest/` | 10 tests x 10 pts = 100 |
 | **GPGPU** | QTest (QOS) | `tests/qtest/gpgpu-test.c` | 17 tests -> 100 pts |
-| **Rust** | QTest + unit | TBD | TBD |
+| **Rust** | QTest + unit | `tests/gevico/qtest/` + `rust/hw/i2c/` | 10 tests x 10 pts = 100 |
 
 ## Quick Start
 
@@ -112,10 +112,15 @@ Implement a PCIe GPGPU device with SIMT execution engine, DMA, and low-precision
 - Run: `make -f Makefile.camp test-gpgpu`
 - Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/gpu/gpu-exper-manual/) | [GPU Datasheet](https://qemu.gevico.online/exercise/2026/stage1/gpu/gpu-datasheet/)
 
-### Rust Experiment
+### Rust Experiment (QTest + Unit)
 
-TBD.
+Implement I2C bus, GPIO I2C controller, and SPI controller in Rust for the G233 SoC. Unit tests verify core Rust logic; QTest tests verify device register behavior and peripheral communication (AT24C02 EEPROM over I2C, AT25 EEPROM over SPI).
 
+- I2C bus: `rust/hw/i2c/src/lib.rs` (3 unit tests)
+- GPIO I2C controller: base `0x10013000`, connected AT24C02 EEPROM (addr `0x50`)
+- SPI controller: base `0x10019000`, connected AT25 EEPROM
+- Tests: `tests/gevico/qtest/test-i2c-*.c`, `tests/gevico/qtest/test-spi-rust-*.c`
+- Run: `make -f Makefile.camp test-rust`
 - Docs: [Experiment Manual](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust Programming Guide](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
 ## Available Make Targets

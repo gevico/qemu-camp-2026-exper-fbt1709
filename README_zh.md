@@ -21,7 +21,7 @@
 | **CPU** | TCG 测题 | `tests/gevico/tcg/` | 10 题 x 10 分 = 100 分 |
 | **SoC** | QTest | `tests/gevico/qtest/` | 10 题 x 10 分 = 100 分 |
 | **GPGPU** | QTest (QOS) | `tests/qtest/gpgpu-test.c` | 17 题 -> 100 分 |
-| **Rust** | QTest + 单元测试 | 待定 | 待定 |
+| **Rust** | QTest + 单元测试 | `tests/gevico/qtest/` + `rust/hw/i2c/` | 10 题 x 10 分 = 100 分 |
 
 ## 快速开始
 
@@ -112,10 +112,15 @@ git push origin main
 - 运行：`make -f Makefile.camp test-gpgpu`
 - 文档：[实验手册](https://qemu.gevico.online/exercise/2026/stage1/gpu/gpu-exper-manual/) | [GPU 硬件手册](https://qemu.gevico.online/exercise/2026/stage1/gpu/gpu-datasheet/)
 
-### Rust 实验
+### Rust 实验（QTest + 单元测试）
 
-待定。
+使用 Rust 为 G233 SoC 实现 I2C 总线、GPIO I2C 控制器和 SPI 控制器。单元测试验证 Rust 核心逻辑；QTest 测试验证设备寄存器行为和外设通信（I2C 连接 AT24C02 EEPROM，SPI 连接 AT25 EEPROM）。
 
+- I2C 总线：`rust/hw/i2c/src/lib.rs`（3 道单元测试）
+- GPIO I2C 控制器：基地址 `0x10013000`，连接 AT24C02 EEPROM（地址 `0x50`）
+- SPI 控制器：基地址 `0x10019000`，连接 AT25 EEPROM
+- 测试：`tests/gevico/qtest/test-i2c-*.c`、`tests/gevico/qtest/test-spi-rust-*.c`
+- 运行：`make -f Makefile.camp test-rust`
 - 文档：[实验手册](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-exper-manual/) | [Rust 编程指南](https://qemu.gevico.online/exercise/2026/stage1/rust/rust-lang-manual/)
 
 ## Make 命令一览
