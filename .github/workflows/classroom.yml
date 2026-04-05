@@ -39,9 +39,11 @@ jobs:
           sudo tar -xJf riscv-toolchain.tar.xz -C /opt/riscv --strip-components=1
           sudo chown -R $USER:$USER /opt/riscv
           echo "/opt/riscv/bin" >> $GITHUB_PATH
+          export PATH="/opt/riscv/bin:$PATH"
           riscv64-unknown-elf-gcc --version
           # Rust toolchain
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          . "$HOME/.cargo/env"
           rustc --version
           cargo install bindgen-cli
 
@@ -115,9 +117,11 @@ jobs:
           sudo tar -xJf riscv-toolchain.tar.xz -C /opt/riscv --strip-components=1
           sudo chown -R $USER:$USER /opt/riscv
           echo "/opt/riscv/bin" >> $GITHUB_PATH
+          export PATH="/opt/riscv/bin:$PATH"
           riscv64-unknown-elf-gcc --version
           # Rust toolchain
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          . "$HOME/.cargo/env"
           rustc --version
           cargo install bindgen-cli
 
@@ -189,8 +193,10 @@ jobs:
           sudo tar -xJf riscv-toolchain.tar.xz -C /opt/riscv --strip-components=1
           sudo chown -R $USER:$USER /opt/riscv
           echo "/opt/riscv/bin" >> $GITHUB_PATH
+          export PATH="/opt/riscv/bin:$PATH"
           riscv64-unknown-elf-gcc --version
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          . "$HOME/.cargo/env"
           rustc --version
           cargo install bindgen-cli
 
