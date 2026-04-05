@@ -1,125 +1,245 @@
+// Copyright 2025 HUST OpenAtom Open Source Club.
+// Author(s): Chen Miao <chenmiao@openatom.club>
+// Author(s): Chao Liu <chao.liu@openatom.club>
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-//! I2C bus model for G233 SoC (QEMU Camp 2026 experiment).
+//! I2C bus model for G233 SoC (QEMU Camp 2026 Rust experiment).
 //!
-//! Students must implement the trait methods and bus logic.
-//! The stubs compile but return default values; unit tests
-//! will fail until the real logic is filled in.
+//! This module provides a pure-Rust I2C bus abstraction modeled after
+//! the upstream QEMU C I2C infrastructure (`include/hw/i2c/i2c.h`).
+//!
+//! Students must implement the TODO-marked methods to make the unit
+//! tests pass. The design follows the upstream pattern:
+//!
+//! - [`I2CEvent`]: bus state change events (START_RECV, START_SEND, FINISH, NACK)
+//! - [`I2CSlave`]: trait for I2C slave devices (send, recv, event)
+//! - [`I2CBus`]: bus that manages slave devices and routes transfers
 
 pub mod bus;
 
-/// Trait representing a single device on the I2C bus.
-pub trait I2CDevice {
+// ─── I2C Event ───────────────────────────────────────────────────────
+
+/// I2C bus events, mirroring `enum i2c_event` from upstream C code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum I2CEvent {
+    /// Master requests to read from slave
+    StartRecv,
+    /// Master requests to write to slave
+    StartSend,
+    /// Transfer finished
+    Finish,
+    /// Master NACKed a received byte
+    Nack,
+}
+
+// ─── I2C Slave trait ─────────────────────────────────────────────────
+
+/// Trait representing an I2C slave device on the bus.
+///
+/// This mirrors `I2CSlaveClass` from upstream QEMU:
+/// - `address()`: the 7-bit slave address
+/// - `event()`: notification of bus state changes (START/FINISH/NACK)
+/// - `send()`: master-to-slave data byte, returns 0 for ACK, non-zero for NACK
+/// - `recv()`: slave-to-master data byte
+pub trait I2CSlave {
     /// Return the 7-bit I2C address of this device.
     fn address(&self) -> u8;
 
-    /// Read one byte from the given register.
-    fn read(&mut self, reg: u8) -> u8;
+    /// Notify the slave of a bus state change.
+    ///
+    /// For `StartRecv`/`StartSend`, return 0 to ACK or non-zero to NACK.
+    /// For `Finish`/`Nack`, the return value is ignored.
+    fn event(&mut self, event: I2CEvent) -> i32 {
+        let _ = event;
+        0
+    }
 
-    /// Write one byte to the given register.
-    fn write(&mut self, reg: u8, data: u8);
+    /// Master sends a data byte to this slave.
+    /// Returns 0 for ACK, non-zero for NACK.
+    fn send(&mut self, data: u8) -> i32;
+
+    /// Slave returns a data byte to the master.
+    fn recv(&mut self) -> u8;
 }
 
-/// A simple I2C bus that holds a collection of devices.
+// ─── I2C Bus ─────────────────────────────────────────────────────────
+
+/// A simple I2C bus that manages a list of slave devices.
+///
+/// Mirrors `I2CBus` from upstream QEMU. The bus holds references to
+/// attached slaves and routes transfers based on 7-bit address matching.
 pub struct I2CBus {
-    devices: Vec<Box<dyn I2CDevice>>,
+    devices: Vec<Box<dyn I2CSlave>>,
+    /// Address of the currently selected slave (set by `start_transfer`)
+    current_addr: Option<u8>,
+    /// Transfer direction: true = recv (slave→master), false = send (master→slave)
+    is_recv: bool,
 }
 
 impl I2CBus {
     /// Create an empty bus with no attached devices.
     pub fn new() -> Self {
-        // TODO: implement
         Self {
             devices: Vec::new(),
+            current_addr: None,
+            is_recv: false,
         }
     }
 
-    /// Attach a device to the bus.
-    pub fn attach(&mut self, _device: Box<dyn I2CDevice>) {
-        // TODO: implement — push the device onto the bus
+    /// Attach a slave device to the bus.
+    pub fn attach(&mut self, _device: Box<dyn I2CSlave>) {
+        // TODO: push the device onto the bus
     }
 
-    /// Return the number of devices currently on the bus.
+    /// Return the number of devices on the bus.
     pub fn device_count(&self) -> usize {
-        // TODO: implement
+        // TODO: return actual count
         0
     }
 
-    /// Perform a read transfer: find the device at `addr`, read
-    /// register `reg`, and return the value.  Returns `None` if
-    /// no device with that address is attached (NACK).
-    pub fn transfer_read(&mut self, _addr: u8, _reg: u8) -> Option<u8> {
-        // TODO: implement — iterate devices, match by address,
-        //       call read(), return Some(value)
-        None
+    /// Check if the bus is busy (a transfer is in progress).
+    pub fn is_busy(&self) -> bool {
+        self.current_addr.is_some()
     }
 
-    /// Perform a write transfer: find the device at `addr` and
-    /// write `data` to register `reg`.  Returns `true` on ACK
-    /// (device found), `false` on NACK.
-    pub fn transfer_write(&mut self, _addr: u8, _reg: u8, _data: u8) -> bool {
-        // TODO: implement — iterate devices, match by address,
-        //       call write(), return true
-        false
+    /// Start a transfer to the slave at `address`.
+    ///
+    /// If `is_recv` is true, the master wants to read (START_RECV).
+    /// If `is_recv` is false, the master wants to write (START_SEND).
+    ///
+    /// Returns 0 on success (slave ACKed), -1 if no slave responds (NACK).
+    ///
+    /// This mirrors `i2c_start_transfer()` from upstream.
+    pub fn start_transfer(&mut self, _address: u8, _is_recv: bool) -> i32 {
+        // TODO: find a device matching _address, call its event()
+        // with StartRecv or StartSend. If ACKed, store current_addr
+        // and is_recv. Return 0 on ACK, -1 on NACK.
+        -1
+    }
+
+    /// End the current transfer, sending Finish event to the active slave.
+    ///
+    /// Mirrors `i2c_end_transfer()` from upstream.
+    pub fn end_transfer(&mut self) {
+        // TODO: send Finish event to the current slave, clear current_addr
+    }
+
+    /// Send a data byte from master to the current slave.
+    ///
+    /// Returns 0 for ACK, non-zero for NACK.
+    /// Mirrors `i2c_send()` from upstream.
+    pub fn send(&mut self, _data: u8) -> i32 {
+        // TODO: call send() on the current slave
+        -1
+    }
+
+    /// Receive a data byte from the current slave to master.
+    ///
+    /// Mirrors `i2c_recv()` from upstream.
+    pub fn recv(&mut self) -> u8 {
+        // TODO: call recv() on the current slave
+        0xFF
+    }
+
+    // ── Convenience helpers (used by unit tests) ──
+
+    /// Perform a complete write transfer: START_SEND + send bytes + FINISH.
+    ///
+    /// Returns true on ACK, false on NACK.
+    pub fn transfer_write(&mut self, addr: u8, data: &[u8]) -> bool {
+        if self.start_transfer(addr, false) != 0 {
+            return false;
+        }
+        for &byte in data {
+            if self.send(byte) != 0 {
+                self.end_transfer();
+                return false;
+            }
+        }
+        self.end_transfer();
+        true
+    }
+
+    /// Perform a complete read transfer: START_RECV + recv `len` bytes + FINISH.
+    ///
+    /// Returns None on NACK, Some(bytes) on success.
+    pub fn transfer_read(&mut self, addr: u8, len: usize) -> Option<Vec<u8>> {
+        if self.start_transfer(addr, true) != 0 {
+            return None;
+        }
+        let mut result = Vec::with_capacity(len);
+        for _ in 0..len {
+            result.push(self.recv());
+        }
+        self.end_transfer();
+        Some(result)
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unit tests — these intentionally FAIL against the stubs above.
-// Students must fill in the TODO bodies to make them pass.
-// ---------------------------------------------------------------------------
+// ─── Unit tests ──────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A trivial mock device that always returns a fixed value.
-    struct MockDevice {
-        addr: u8,
-    }
-
-    impl I2CDevice for MockDevice {
-        fn address(&self) -> u8 {
-            self.addr
-        }
-        fn read(&mut self, _reg: u8) -> u8 {
-            0xAB
-        }
-        fn write(&mut self, _reg: u8, _data: u8) {}
-    }
-
-    /// A mock EEPROM: 256-byte register file.
+    /// Mock EEPROM device: 256-byte register file, supports I2C protocol.
+    /// Write: first byte = register address, subsequent bytes = data.
+    /// Read: returns bytes starting from the last set register address.
     struct MockEeprom {
         addr: u8,
         regs: [u8; 256],
+        pointer: u8,
+        first_byte: bool,
     }
 
     impl MockEeprom {
         fn new(addr: u8) -> Self {
             Self {
                 addr,
-                regs: [0u8; 256],
+                regs: [0xFF; 256],
+                pointer: 0,
+                first_byte: true,
             }
         }
     }
 
-    impl I2CDevice for MockEeprom {
+    impl I2CSlave for MockEeprom {
         fn address(&self) -> u8 {
             self.addr
         }
-        fn read(&mut self, reg: u8) -> u8 {
-            self.regs[reg as usize]
+
+        fn event(&mut self, event: I2CEvent) -> i32 {
+            if event == I2CEvent::StartSend {
+                self.first_byte = true;
+            }
+            0
         }
-        fn write(&mut self, reg: u8, data: u8) {
-            self.regs[reg as usize] = data;
+
+        fn send(&mut self, data: u8) -> i32 {
+            if self.first_byte {
+                self.pointer = data;
+                self.first_byte = false;
+            } else {
+                self.regs[self.pointer as usize] = data;
+                self.pointer = self.pointer.wrapping_add(1);
+            }
+            0
+        }
+
+        fn recv(&mut self) -> u8 {
+            let val = self.regs[self.pointer as usize];
+            self.pointer = self.pointer.wrapping_add(1);
+            val
         }
     }
 
     #[test]
     fn test_i2c_bus_create() {
         let mut bus = I2CBus::new();
-        bus.attach(Box::new(MockDevice { addr: 0x50 }));
-        assert_eq!(bus.device_count(), 1, "bus should have exactly 1 device");
+        bus.attach(Box::new(MockEeprom::new(0x50)));
+        assert_eq!(bus.device_count(), 1, "bus should have 1 device");
+        bus.attach(Box::new(MockEeprom::new(0x51)));
+        assert_eq!(bus.device_count(), 2, "bus should have 2 devices");
     }
 
     #[test]
@@ -127,19 +247,29 @@ mod tests {
         let mut bus = I2CBus::new();
         bus.attach(Box::new(MockEeprom::new(0x50)));
 
-        let ack = bus.transfer_write(0x50, 0x10, 0xDE);
+        // Write: addr_byte=0x10, data=0xDE
+        let ack = bus.transfer_write(0x50, &[0x10, 0xDE]);
         assert!(ack, "write to attached device must ACK");
 
-        let val = bus.transfer_read(0x50, 0x10);
-        assert_eq!(val, Some(0xDE), "read back must return written value");
+        // Set read pointer: write register address first
+        bus.transfer_write(0x50, &[0x10]);
+
+        // Read back 1 byte
+        let data = bus.transfer_read(0x50, 1);
+        assert_eq!(data, Some(vec![0xDE]), "read back must match written value");
     }
 
     #[test]
     fn test_i2c_bus_nack() {
         let mut bus = I2CBus::new();
-        bus.attach(Box::new(MockDevice { addr: 0x50 }));
+        bus.attach(Box::new(MockEeprom::new(0x50)));
 
-        let val = bus.transfer_read(0x77, 0x00);
-        assert_eq!(val, None, "read from non-existent address must NACK");
+        // Read from non-existent address
+        let data = bus.transfer_read(0x77, 1);
+        assert_eq!(data, None, "read from non-existent address must NACK");
+
+        // Write to non-existent address
+        let ack = bus.transfer_write(0x77, &[0x00]);
+        assert!(!ack, "write to non-existent address must NACK");
     }
 }
