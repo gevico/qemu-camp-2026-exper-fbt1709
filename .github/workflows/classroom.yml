@@ -83,7 +83,7 @@ jobs:
             --argjson totalScore "${{ steps.score.outputs.total }}" \
             '{channel: $channel, courseId: $courseId, ext: $ext, name: $name, score: $score, totalScore: $totalScore}')
           echo "$summary"
-          curl -X POST "${{ secrets.QEMU_CAMP_2026_CPU_COURSE_POST_API }}" \
+          curl -X POST "${{ secrets.QEMU_CAMP_2026_COURSE_POST_API }}" \
             -H "accept: application/json;charset=utf-8" \
             -H "Content-Type: application/json" \
             -H "token: ${{ secrets.QEMU_CAMP_2026_CPU_AUTUMN_TOKEN }}" \
@@ -161,7 +161,7 @@ jobs:
             --argjson totalScore "${{ steps.score.outputs.total }}" \
             '{channel: $channel, courseId: $courseId, ext: $ext, name: $name, score: $score, totalScore: $totalScore}')
           echo "$summary"
-          curl -X POST "${{ secrets.QEMU_CAMP_2026_SOC_COURSE_POST_API }}" \
+          curl -X POST "${{ secrets.QEMU_CAMP_2026_COURSE_POST_API }}" \
             -H "accept: application/json;charset=utf-8" \
             -H "Content-Type: application/json" \
             -H "token: ${{ secrets.QEMU_CAMP_2026_SOC_AUTUMN_TOKEN }}" \
@@ -228,17 +228,17 @@ jobs:
         run: |
           summary=$(jq -n \
             --arg channel "github" \
-            --argjson courseId "${{ secrets.QEMU_CAMP_2026_GPGPU_AUTUMN_COURSE_ID }}" \
+            --argjson courseId "${{ secrets.QEMU_CAMP_2026_GPU_AUTUMN_COURSE_ID }}" \
             --arg ext "{}" \
             --arg name "${{ github.actor }}" \
             --argjson score "${{ steps.score.outputs.score }}" \
             --argjson totalScore "${{ steps.score.outputs.total }}" \
             '{channel: $channel, courseId: $courseId, ext: $ext, name: $name, score: $score, totalScore: $totalScore}')
           echo "$summary"
-          curl -X POST "${{ secrets.QEMU_CAMP_2026_GPGPU_COURSE_POST_API }}" \
+          curl -X POST "${{ secrets.QEMU_CAMP_2026_COURSE_POST_API }}" \
             -H "accept: application/json;charset=utf-8" \
             -H "Content-Type: application/json" \
-            -H "token: ${{ secrets.QEMU_CAMP_2026_GPGPU_AUTUMN_TOKEN }}" \
+            -H "token: ${{ secrets.QEMU_CAMP_2026_GPU_AUTUMN_TOKEN }}" \
             -d "$summary" \
             -v
 
