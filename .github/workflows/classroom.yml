@@ -165,12 +165,14 @@ jobs:
             -v
 
   # ────────────────────────────────────────────────────────────
-  # GPGPU experiment — QTest (placeholder)
+  # GPGPU experiment — QTest (QOS), 17 subtests → 100 points
   # ────────────────────────────────────────────────────────────
   gpgpu:
     name: "GPGPU Experiment (QTest)"
     runs-on: ubuntu-24.04
-    if: false  # TODO: enable when GPGPU tests are ready
+    env:
+      RESULT_LOG: build/gpgpu-result.log
+      TOTAL_CASES: 17
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -178,16 +180,61 @@ jobs:
           submodules: recursive
 
       - name: Install dependencies
-        run: echo "TODO"
-
-      - name: Build & Test
         run: |
-          make -f Makefile.camp configure
+          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
+          sudo apt-get build-dep -y qemu
+          sudo mkdir -p /opt/riscv
+          wget -q https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.09.28/riscv64-elf-ubuntu-24.04-gcc-nightly-2025.09.28-nightly.tar.xz -O riscv-toolchain.tar.xz
+          sudo tar -xJf riscv-toolchain.tar.xz -C /opt/riscv --strip-components=1
+          sudo chown -R $USER:$USER /opt/riscv
+          echo "/opt/riscv/bin" >> $GITHUB_PATH
+          riscv64-unknown-elf-gcc --version
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          rustc --version
+          cargo install bindgen-cli
+
+      - name: Configure
+        run: make -f Makefile.camp configure
+
+      - name: Build
+        run: make -f Makefile.camp build
+
+      - name: Run GPGPU tests
+        run: |
           make -f Makefile.camp test-gpgpu || true
 
+      - name: Calculate score
+        id: score
+        run: |
+          passed=0
+          if [ -f "$RESULT_LOG" ]; then
+            passed=$(cat "$RESULT_LOG" 2>/dev/null || echo 0)
+          fi
+          score=$((passed * 100 / TOTAL_CASES))
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "score=$score"   >> "$GITHUB_OUTPUT"
+          echo "total=100"      >> "$GITHUB_OUTPUT"
+          echo "::notice::GPGPU experiment: $passed/$TOTAL_CASES cases passed, score $score/100"
+
       - name: Upload score
-        if: false  # TODO: score > 0 check
-        run: echo "TODO"
+        if: ${{ steps.score.outputs.score != '0' }}
+        run: |
+          summary=$(jq -n \
+            --arg channel "github" \
+            --argjson courseId "${{ secrets.QEMU_CAMP_2026_GPGPU_AUTUMN_COURSE_ID }}" \
+            --arg ext "{}" \
+            --arg name "${{ github.actor }}" \
+            --argjson score "${{ steps.score.outputs.score }}" \
+            --argjson totalScore "${{ steps.score.outputs.total }}" \
+            '{channel: $channel, courseId: $courseId, ext: $ext, name: $name, score: $score, totalScore: $totalScore}')
+          echo "$summary"
+          curl -X POST "${{ secrets.QEMU_CAMP_2026_GPGPU_COURSE_POST_API }}" \
+            -H "accept: application/json;charset=utf-8" \
+            -H "Content-Type: application/json" \
+            -H "token: ${{ secrets.QEMU_CAMP_2026_GPGPU_AUTUMN_TOKEN }}" \
+            -d "$summary" \
+            -v
 
   # ────────────────────────────────────────────────────────────
   # Rust experiment — QTest + native unit tests (placeholder)

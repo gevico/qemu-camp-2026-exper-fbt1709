@@ -114,13 +114,31 @@ test-soc: build
 	echo "$$passed" > $(BUILD_DIR)/soc-result.log; \
 	echo "--- SoC experiment: $$passed/$$total tests passed ---"
 
-# ─── GPGPU experiment (QTest) ─────────────────────────────────────────
+# ─── GPGPU experiment (QTest via QOS) ─────────────────────────────────
+# 17 subtests inside qos-test, run individually for scoring.
+# Score: passed * 100 / 17 (rounded down), total = 100.
+
+GPGPU_SUBTESTS := device-id vram-size global-ctrl dispatch-regs \
+                  vram-access dma-regs irq-regs \
+                  simt-thread-id simt-block-id simt-warp-lane \
+                  simt-thread-mask simt-reset \
+                  kernel-exec fp-kernel-exec \
+                  lp-convert lp-convert-e5m2-e2m1 lp-convert-saturate
+
+GPGPU_TOTAL := 17
 
 .PHONY: test-gpgpu
 test-gpgpu: build
-	cd $(BUILD_DIR) && meson test --suite qtest-riscv64 --test-args '-p /riscv64/gpgpu*' \
-	    --print-errorlogs --no-rebuild
-	@echo "--- GPGPU experiment tests done ---"
+	@passed=0; \
+	for t in $(GPGPU_SUBTESTS); do \
+	    if $(BUILD_DIR)/tests/qtest/qos-test -p /riscv64/gpgpu-tests/$$t \
+	        --tap -k 2>/dev/null | grep -q "^ok "; then \
+	        passed=$$((passed + 1)); \
+	    fi; \
+	done; \
+	score=$$((passed * 100 / $(GPGPU_TOTAL))); \
+	echo "$$passed" > $(BUILD_DIR)/gpgpu-result.log; \
+	echo "--- GPGPU experiment: $$passed/$(GPGPU_TOTAL) tests passed, score $$score/100 ---"
 
 # ─── Rust experiment (unit tests + QTest) ─────────────────────────────
 
