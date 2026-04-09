@@ -781,3 +781,256 @@ done:
 }
 
 #endif /* !CONFIG_USER_ONLY */
+
+void helper_dma(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong dst_addr = env->gpr[rd];     // 从 rd 寄存器取目标地址
+    target_ulong src_addr = env->gpr[rs1];    // 从 rs1 寄存器取源地址
+    int grain = (int)env->gpr[rs2];           // 从 rs2 寄存器取 grain
+    int n = 8 << grain;                        // grain → 矩阵大小
+
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            float val;
+            target_ulong src_off = src_addr + ((target_ulong)i * n + j) * sizeof(float);
+            target_ulong dst_off = dst_addr + ((target_ulong)j * n + i) * sizeof(float);
+
+            cpu_memory_rw_debug(env_cpu(env), src_off, (uint8_t *)&val, sizeof(val), 0);
+            cpu_memory_rw_debug(env_cpu(env), dst_off, (uint8_t *)&val, sizeof(val), 1);
+        }
+    }
+}
+
+/*
+ * sort：INT32 升序冒泡，仅排序 [0, k)（部分排序）；[k, n) 不动。
+ * 指令字段 rd/rs1/rs2 为 GPR 编号：gpr[rd]=k，gpr[rs1]=数组基址，gpr[rs2]=数组元素个数 n。
+ */
+void helper_sort(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    uint32_t k = (uint32_t)env->gpr[rd];
+    target_ulong base = env->gpr[rs1];
+    uint32_t n = (uint32_t)env->gpr[rs2];
+
+    if (n == 0 || k <= 1) {
+        return;
+    }
+    if (k > n) {
+        k = n;
+    }
+
+    for (uint32_t i = 0; i < k - 1; i++) {
+        for (uint32_t j = 0; j < k - i - 1; j++) {
+            int32_t a, b;
+            target_ulong off_a = base + (target_ulong)j * sizeof(int32_t);
+            target_ulong off_b = base + (target_ulong)(j + 1) * sizeof(int32_t);
+
+            cpu_memory_rw_debug(env_cpu(env), off_a, (uint8_t *)&a, sizeof(a), 0);
+            cpu_memory_rw_debug(env_cpu(env), off_b, (uint8_t *)&b, sizeof(b), 0);
+            if (a > b) {
+                cpu_memory_rw_debug(env_cpu(env), off_a, (uint8_t *)&b, sizeof(b), 1);
+                cpu_memory_rw_debug(env_cpu(env), off_b, (uint8_t *)&a, sizeof(a), 1);
+            }
+        }
+    }
+}
+
+/*
+ * crush：8-bit → 4-bit 打包。与 test pack_low4bits 一致：
+ *   全成对时 dst[i] = (src[2*i] & 0x0f) | ((src[2*i+1] & 0x0f) << 4)；
+ *   n 为奇数时最后一字节仅含 src[n-1] 的低 4 位。
+ * rd/rs1/rs2 为指令中的 GPR 编号：gpr[rd]=目的地址，gpr[rs1]=源地址，gpr[rs2]=元素个数 n。
+ */
+void helper_crush(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong dst_base = env->gpr[rd];
+    target_ulong src_base = env->gpr[rs1];
+    uint32_t n = (uint32_t)env->gpr[rs2];
+
+    if (n == 0) {
+        return;
+    }
+
+    uint32_t pairs = n / 2;
+    for (uint32_t i = 0; i < pairs; i++) {
+        uint8_t lo, hi, out;
+        target_ulong off0 = src_base + (target_ulong)(2 * i);
+        target_ulong off1 = src_base + (target_ulong)(2 * i + 1);
+
+        cpu_memory_rw_debug(env_cpu(env), off0, &lo, 1, 0);
+        cpu_memory_rw_debug(env_cpu(env), off1, &hi, 1, 0);
+        out = (lo & 0x0F) | ((hi & 0x0F) << 4);
+        cpu_memory_rw_debug(env_cpu(env), dst_base + i, &out, 1, 1);
+    }
+    if (n & 1) {
+        uint8_t last;
+        uint32_t out_idx = (n + 1) / 2 - 1;
+
+        cpu_memory_rw_debug(env_cpu(env), src_base + (target_ulong)(n - 1), &last, 1, 0);
+        last &= 0x0F;
+        cpu_memory_rw_debug(env_cpu(env), dst_base + out_idx, &last, 1, 1);
+    }
+}
+
+/*
+ * expand：每字节拆成两个 4-bit 写入目标（与 test split_to_4bits 一致）：
+ *   dst[2*i]   = src[i] & 0x0f;
+ *   dst[2*i+1] = (src[i] >> 4) & 0x0f;
+ * rd/rs1/rs2 为指令中的 GPR 编号：gpr[rd]=目的地址，gpr[rs1]=源地址，gpr[rs2]=源字节数 n。
+ */
+void helper_expand(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong dst_base = env->gpr[rd];
+    target_ulong src_base = env->gpr[rs1];
+    uint32_t n = (uint32_t)env->gpr[rs2];
+
+    if (n == 0) {
+        return;
+    }
+
+    for (uint32_t i = 0; i < n; i++) {
+        uint8_t in, lo, hi;
+
+        cpu_memory_rw_debug(env_cpu(env),
+                            src_base + (target_ulong)i * sizeof(uint8_t),
+                            &in, sizeof(in), 0);
+
+        lo = in & 0x0F;
+        hi = (in >> 4) & 0x0F;
+
+        cpu_memory_rw_debug(env_cpu(env),
+                            dst_base + (target_ulong)(2 * i) * sizeof(uint8_t),
+                            &lo, sizeof(lo), 1);
+        cpu_memory_rw_debug(env_cpu(env),
+                            dst_base + (target_ulong)(2 * i + 1) * sizeof(uint8_t),
+                            &hi, sizeof(hi), 1);
+    }
+}
+
+void helper_vdot(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong a_addr = env->gpr[rs1];
+    target_ulong b_addr = env->gpr[rs2];
+    int64_t acc = 0;
+
+    for (uint32_t i = 0; i < 16; i++) {
+        int32_t a, b;
+        target_ulong a_off = a_addr + (target_ulong)i * sizeof(int32_t);
+        target_ulong b_off = b_addr + (target_ulong)i * sizeof(int32_t);
+
+        cpu_memory_rw_debug(env_cpu(env), a_off, (uint8_t *)&a, sizeof(a), 0);
+        cpu_memory_rw_debug(env_cpu(env), b_off, (uint8_t *)&b, sizeof(b), 0);
+        acc += (int64_t)a * (int64_t)b;
+    }
+
+    if (rd != 0) {
+        env->gpr[rd] = (target_ulong)acc;
+    }
+}
+
+void helper_vrelu(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong src_addr = env->gpr[rs1];
+    target_ulong dst_addr = env->gpr[rd];
+    uint32_t n = (uint32_t)env->gpr[rs2];
+
+    for (uint32_t i = 0; i < n; i++) {
+        int32_t v;
+        target_ulong src_off = src_addr + (target_ulong)i * sizeof(int32_t);
+        target_ulong dst_off = dst_addr + (target_ulong)i * sizeof(int32_t);
+
+        cpu_memory_rw_debug(env_cpu(env), src_off, (uint8_t *)&v, sizeof(v), 0);
+        if (v < 0) {
+            v = 0;
+        }
+        cpu_memory_rw_debug(env_cpu(env), dst_off, (uint8_t *)&v, sizeof(v), 1);
+    }
+}
+
+void helper_vscale(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong src_addr = env->gpr[rs1];
+    target_ulong dst_addr = env->gpr[rd];
+    int64_t scale = (int64_t)env->gpr[rs2];
+
+    for (uint32_t i = 0; i < 16; i++) {
+        int32_t src_v;
+        int32_t dst_v;
+        int64_t prod;
+        target_ulong src_off = src_addr + (target_ulong)i * sizeof(int32_t);
+        target_ulong dst_off = dst_addr + (target_ulong)i * sizeof(int32_t);
+
+        cpu_memory_rw_debug(env_cpu(env), src_off, (uint8_t *)&src_v, sizeof(src_v), 0);
+        prod = (int64_t)src_v * scale;
+        dst_v = (int32_t)prod;
+        cpu_memory_rw_debug(env_cpu(env), dst_off, (uint8_t *)&dst_v, sizeof(dst_v), 1);
+    }
+}
+
+void helper_vmax(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong src_addr = env->gpr[rs1];
+    uint32_t n = (uint32_t)env->gpr[rs2];
+    int32_t max_v;
+
+    if (n == 0) {
+        return;
+    }
+
+    cpu_memory_rw_debug(env_cpu(env), src_addr, (uint8_t *)&max_v, sizeof(max_v), 0);
+    for (uint32_t i = 1; i < n; i++) {
+        int32_t v;
+        target_ulong src_off = src_addr + (target_ulong)i * sizeof(int32_t);
+        cpu_memory_rw_debug(env_cpu(env), src_off, (uint8_t *)&v, sizeof(v), 0);
+        if (v > max_v) {
+            max_v = v;
+        }
+    }
+
+    if (rd != 0) {
+        env->gpr[rd] = (target_long)max_v;
+    }
+}
+
+void helper_gemm(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong a_addr = env->gpr[rs1];
+    target_ulong b_addr = env->gpr[rs2];
+    target_ulong c_addr = env->gpr[rd];
+
+    for (uint32_t i = 0; i < 4; i++) {
+        for (uint32_t j = 0; j < 4; j++) {
+            int64_t acc = 0;
+            for (uint32_t k = 0; k < 4; k++) {
+                int32_t a, b;
+                target_ulong a_off = a_addr + ((target_ulong)i * 4 + k) * sizeof(int32_t);
+                target_ulong b_off = b_addr + ((target_ulong)k * 4 + j) * sizeof(int32_t);
+                cpu_memory_rw_debug(env_cpu(env), a_off, (uint8_t *)&a, sizeof(a), 0);
+                cpu_memory_rw_debug(env_cpu(env), b_off, (uint8_t *)&b, sizeof(b), 0);
+                acc += (int64_t)a * (int64_t)b;
+            }
+            int32_t c = (int32_t)acc;
+            target_ulong c_off = c_addr + ((target_ulong)i * 4 + j) * sizeof(int32_t);
+            cpu_memory_rw_debug(env_cpu(env), c_off, (uint8_t *)&c, sizeof(c), 1);
+        }
+    }
+}
+
+void helper_vadd(CPURISCVState *env, target_ulong rd, target_ulong rs1, target_ulong rs2)
+{
+    target_ulong a_addr = env->gpr[rs1];
+    target_ulong b_addr = env->gpr[rs2];
+    target_ulong c_addr = env->gpr[rd];
+
+    for (uint32_t i = 0; i < 16; i++) {
+        int32_t a, b;
+        int32_t c;
+        target_ulong a_off = a_addr + (target_ulong)i * sizeof(int32_t);
+        target_ulong b_off = b_addr + (target_ulong)i * sizeof(int32_t);
+        target_ulong c_off = c_addr + (target_ulong)i * sizeof(int32_t);
+
+        cpu_memory_rw_debug(env_cpu(env), a_off, (uint8_t *)&a, sizeof(a), 0);
+        cpu_memory_rw_debug(env_cpu(env), b_off, (uint8_t *)&b, sizeof(b), 0);
+        c = a + b;
+        cpu_memory_rw_debug(env_cpu(env), c_off, (uint8_t *)&c, sizeof(c), 1);
+    }
+}
