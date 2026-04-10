@@ -94,6 +94,8 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_APLIC_M] =      {  0xc000000, APLIC_SIZE(VIRT_CPUS_MAX) },
     [VIRT_APLIC_S] =      {  0xd000000, APLIC_SIZE(VIRT_CPUS_MAX) },
     [VIRT_UART0] =        { 0x10000000,         0x100 },
+    [VIRT_GPIO0] =        { 0x10012000,        0x1000 },
+    [VIRT_PWM0] =         { 0x10015000,        0x1000 },
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
     [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
@@ -102,6 +104,7 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_PCIE_ECAM] =    { 0x30000000,    0x10000000 },
     [VIRT_PCIE_MMIO] =    { 0x40000000,    0x40000000 },
     [VIRT_DRAM] =         { 0x80000000,           0x0 },
+    [VIRT_WDT0] =         { 0x10010000,        0x1000 },
 };
 
 /* PCIe high mmio is fixed for RV32 */
@@ -988,6 +991,58 @@ static void create_fdt_uart(RISCVG233State *s,
     qemu_fdt_setprop_string(ms->fdt, "/aliases", "serial0", name);
 }
 
+static void create_fdt_gpio(RISCVG233State *s, uint32_t irq_mmio_phandle)
+{
+    g_autofree char *name = NULL;
+    MachineState *ms = MACHINE(s);
+
+    name = g_strdup_printf("/soc/gpio@%"HWADDR_PRIx, s->memmap[VIRT_GPIO0].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "gevico,g233-gpio");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_GPIO0].base,
+                                 2, s->memmap[VIRT_GPIO0].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent", irq_mmio_phandle);
+    if (s->aia_type == G233_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", GPIO_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", GPIO_IRQ, 0x4);
+    }
+}
+
+static void create_fdt_pwm(RISCVG233State *s)
+{
+    g_autofree char *name = NULL;
+    MachineState *ms = MACHINE(s);
+
+    name = g_strdup_printf("/soc/pwm@%"HWADDR_PRIx, s->memmap[VIRT_PWM0].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "gevico,g233-pwm");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_PWM0].base,
+                                 2, s->memmap[VIRT_PWM0].size);
+}
+
+static void create_fdt_wdt(RISCVG233State *s, uint32_t irq_mmio_phandle)
+{
+    g_autofree char *name = NULL;
+    MachineState *ms = MACHINE(s);
+
+    name = g_strdup_printf("/soc/watchdog@%"HWADDR_PRIx,
+                           s->memmap[VIRT_WDT0].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "gevico,g233-wdt");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_WDT0].base,
+                                 2, s->memmap[VIRT_WDT0].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent", irq_mmio_phandle);
+    if (s->aia_type == G233_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", WDT_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", WDT_IRQ, 0x4);
+    }
+}
+
 static void create_fdt_rtc(RISCVG233State *s,
                            uint32_t irq_mmio_phandle)
 {
@@ -1156,6 +1211,9 @@ static void finalize_fdt(RISCVG233State *s)
     create_fdt_reset(s, &phandle);
 
     create_fdt_uart(s, irq_mmio_phandle);
+    create_fdt_wdt(s, irq_mmio_phandle);
+    create_fdt_gpio(s, irq_mmio_phandle);
+    create_fdt_pwm(s);
 
     create_fdt_rtc(s, irq_mmio_phandle);
 }
@@ -1711,6 +1769,12 @@ static void virt_machine_init(MachineState *machine)
     pl011_create(s->memmap[VIRT_UART0].base,
                  qdev_get_gpio_in(mmio_irqchip, UART0_IRQ),
                  serial_hd(0));
+
+    sysbus_create_simple("g233.gpio", s->memmap[VIRT_GPIO0].base,
+                         qdev_get_gpio_in(mmio_irqchip, GPIO_IRQ));
+    sysbus_create_simple("g233.pwm", s->memmap[VIRT_PWM0].base, NULL);
+    sysbus_create_simple("g233.wdt", s->memmap[VIRT_WDT0].base,
+                         qdev_get_gpio_in(mmio_irqchip, WDT_IRQ));
 
     sysbus_create_simple("goldfish_rtc", s->memmap[VIRT_RTC].base,
         qdev_get_gpio_in(mmio_irqchip, RTC_IRQ));

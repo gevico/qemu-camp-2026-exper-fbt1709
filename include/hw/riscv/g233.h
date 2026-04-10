@@ -79,6 +79,8 @@ enum {
     VIRT_APLIC_M,
     VIRT_APLIC_S,
     VIRT_UART0,
+    VIRT_GPIO0,
+    VIRT_PWM0,
     VIRT_VIRTIO,
     VIRT_FW_CFG,
     VIRT_IMSIC_M,
@@ -90,10 +92,13 @@ enum {
     VIRT_PLATFORM_BUS,
     VIRT_PCIE_ECAM,
     VIRT_IOMMU_SYS,
+    VIRT_WDT0,
 };
 
 enum {
     UART0_IRQ = 10,
+    GPIO_IRQ = 2,
+    WDT_IRQ = 4,
     RTC_IRQ = 11,
     VIRTIO_IRQ = 1, /* 1 to 8 */
     VIRTIO_COUNT = 8,
