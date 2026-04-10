@@ -81,6 +81,7 @@ enum {
     VIRT_UART0,
     VIRT_GPIO0,
     VIRT_PWM0,
+    VIRT_SPI,
     VIRT_VIRTIO,
     VIRT_FW_CFG,
     VIRT_IMSIC_M,
@@ -99,6 +100,7 @@ enum {
     UART0_IRQ = 10,
     GPIO_IRQ = 2,
     WDT_IRQ = 4,
+    SPI_IRQ = 5, /* PLIC line for SPI (gevico SPI interrupt tests) */
     RTC_IRQ = 11,
     VIRTIO_IRQ = 1, /* 1 to 8 */
     VIRTIO_COUNT = 8,

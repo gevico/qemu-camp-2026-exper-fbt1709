@@ -52,6 +52,7 @@
 #include "system/kvm.h"
 #include "system/tpm.h"
 #include "system/qtest.h"
+#include "hw/ssi/ssi.h"
 #include "hw/pci/pci.h"
 #include "hw/pci-host/gpex.h"
 #include "hw/display/ramfb.h"
@@ -98,6 +99,7 @@ static const MemMapEntry virt_memmap[] = {
     [VIRT_PWM0] =         { 0x10015000,        0x1000 },
     [VIRT_VIRTIO] =       { 0x10001000,        0x1000 },
     [VIRT_FW_CFG] =       { 0x10100000,          0x18 },
+    [VIRT_SPI] =          { 0x10018000,          0x18 },
     [VIRT_FLASH] =        { 0x20000000,     0x4000000 },
     [VIRT_IMSIC_M] =      { 0x24000000, VIRT_IMSIC_MAX_SIZE },
     [VIRT_IMSIC_S] =      { 0x28000000, VIRT_IMSIC_MAX_SIZE },
@@ -1775,6 +1777,31 @@ static void virt_machine_init(MachineState *machine)
     sysbus_create_simple("g233.pwm", s->memmap[VIRT_PWM0].base, NULL);
     sysbus_create_simple("g233.wdt", s->memmap[VIRT_WDT0].base,
                          qdev_get_gpio_in(mmio_irqchip, WDT_IRQ));
+
+    DeviceState *spi = qdev_new("g233.spi");
+    SysBusDevice *spi_sbd = SYS_BUS_DEVICE(spi);
+    SSIBus *spi_bus;
+    DeviceState *flash0;
+    DeviceState *flash1;
+
+    qdev_realize_and_unref(spi, NULL, &error_fatal);
+    sysbus_mmio_map(spi_sbd, 0, s->memmap[VIRT_SPI].base);
+    sysbus_connect_irq(spi_sbd, 0,
+                       qdev_get_gpio_in(mmio_irqchip, SPI_IRQ));
+
+    spi_bus = (SSIBus *)qdev_get_child_bus(spi, "spi");
+
+    flash0 = qdev_new("w25x16");
+    qdev_prop_set_uint8(flash0, "cs", 0);
+    qdev_realize_and_unref(flash0, BUS(spi_bus), &error_fatal);
+    sysbus_connect_irq(spi_sbd, 1,
+                       qdev_get_gpio_in_named(flash0, SSI_GPIO_CS, 0));
+
+    flash1 = qdev_new("w25x32");
+    qdev_prop_set_uint8(flash1, "cs", 1);
+    qdev_realize_and_unref(flash1, BUS(spi_bus), &error_fatal);
+    sysbus_connect_irq(spi_sbd, 2,
+                       qdev_get_gpio_in_named(flash1, SSI_GPIO_CS, 0));
 
     sysbus_create_simple("goldfish_rtc", s->memmap[VIRT_RTC].base,
         qdev_get_gpio_in(mmio_irqchip, RTC_IRQ));
