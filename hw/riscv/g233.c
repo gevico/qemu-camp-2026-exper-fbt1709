@@ -1068,6 +1068,43 @@ static void create_fdt_rtc(RISCVG233State *s,
     }
 }
 
+static void create_fdt_spi(RISCVG233State *s, uint32_t irq_mmio_phandle)
+{
+    g_autofree char *name = NULL;
+    g_autofree char *flash0 = NULL;
+    g_autofree char *flash1 = NULL;
+    MachineState *ms = MACHINE(s);
+
+    name = g_strdup_printf("/soc/spi@%" HWADDR_PRIx, s->memmap[VIRT_SPI].base);
+    qemu_fdt_add_subnode(ms->fdt, name);
+    qemu_fdt_setprop_string(ms->fdt, name, "compatible", "gevico,g233-spi");
+    qemu_fdt_setprop_sized_cells(ms->fdt, name, "reg",
+                                 2, s->memmap[VIRT_SPI].base,
+                                 2, s->memmap[VIRT_SPI].size);
+    qemu_fdt_setprop_cell(ms->fdt, name, "interrupt-parent", irq_mmio_phandle);
+    if (s->aia_type == G233_AIA_TYPE_NONE) {
+        qemu_fdt_setprop_cell(ms->fdt, name, "interrupts", SPI_IRQ);
+    } else {
+        qemu_fdt_setprop_cells(ms->fdt, name, "interrupts", SPI_IRQ, 0x4);
+    }
+    qemu_fdt_setprop_cell(ms->fdt, name, "#address-cells", 1);
+    qemu_fdt_setprop_cell(ms->fdt, name, "#size-cells", 0);
+
+    flash0 = g_strdup_printf("%s/flash@0", name);
+    qemu_fdt_add_subnode(ms->fdt, flash0);
+    qemu_fdt_setprop_string(ms->fdt, flash0, "compatible", "jedec,spi-nor");
+    qemu_fdt_setprop_cell(ms->fdt, flash0, "reg", 0);
+    qemu_fdt_setprop_cell(ms->fdt, flash0, "spi-max-frequency", 50000000);
+
+    flash1 = g_strdup_printf("%s/flash@1", name);
+    qemu_fdt_add_subnode(ms->fdt, flash1);
+    qemu_fdt_setprop_string(ms->fdt, flash1, "compatible", "jedec,spi-nor");
+    qemu_fdt_setprop_cell(ms->fdt, flash1, "reg", 1);
+    qemu_fdt_setprop_cell(ms->fdt, flash1, "spi-max-frequency", 50000000);
+
+    qemu_fdt_setprop_string(ms->fdt, "/aliases", "spi0", name);
+}
+
 static void create_fdt_flash(RISCVG233State *s)
 {
     MachineState *ms = MACHINE(s);
@@ -1218,6 +1255,7 @@ static void finalize_fdt(RISCVG233State *s)
     create_fdt_pwm(s);
 
     create_fdt_rtc(s, irq_mmio_phandle);
+    create_fdt_spi(s, irq_mmio_phandle);
 }
 
 static void create_fdt(RISCVG233State *s)

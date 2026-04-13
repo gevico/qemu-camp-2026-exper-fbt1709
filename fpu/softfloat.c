@@ -3011,6 +3011,32 @@ float8_e5m2 float32_to_float8_e5m2(float32 a, bool saturate, float_status *s)
     return float8_e5m2_round_pack_canonical(&p, s, saturate);
 }
 
+static float4_e2m1 float4_e2m1_round_pack_canonical(FloatParts64 *p,
+                                                    float_status *s,
+                                                    bool saturate)
+{
+    parts_uncanon(p, s, &float4_e2m1_params, saturate);
+    return pack_raw64(p, &float4_e2m1_params);
+}
+
+float4_e2m1 float32_to_float4_e2m1(float32 a, bool saturate, float_status *s)
+{
+    FloatParts64 p;
+
+    float32_unpack_canonical(&p, a, s);
+    parts_float_to_float(&p, s);
+    return float4_e2m1_round_pack_canonical(&p, s, saturate);
+}
+
+float32 float4_e2m1_to_float32(float4_e2m1 a, float_status *s)
+{
+    FloatParts64 p;
+
+    float4_e2m1_unpack_canonical(&p, a, s);
+    parts_float_to_float(&p, s);
+    return float32_round_pack_canonical(&p, s);
+}
+
 float16 float32_to_float16(float32 a, bool ieee, float_status *s)
 {
     FloatParts64 p;
