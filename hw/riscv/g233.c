@@ -1784,7 +1784,7 @@ static void virt_machine_init(MachineState *machine)
     DeviceState *flash0;
     DeviceState *flash1;
 
-    qdev_realize_and_unref(spi, NULL, &error_fatal);
+    sysbus_realize_and_unref(spi_sbd, &error_fatal);
     sysbus_mmio_map(spi_sbd, 0, s->memmap[VIRT_SPI].base);
     sysbus_connect_irq(spi_sbd, 0,
                        qdev_get_gpio_in(mmio_irqchip, SPI_IRQ));
